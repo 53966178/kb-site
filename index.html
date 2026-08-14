@@ -1,0 +1,1524 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>KB 知识库 · 登录 / 注册</title>
+<style>
+  :root {
+    /* 严格继承设计稿设计令牌 */
+    --page-bg: #F5F7FB;          /* rgb(245,247,251) */
+    --card-bg: #FFFFFF;
+    --card-border: #E5E7EB;      /* rgb(229,231,235) */
+    --accent: #4F46E5;           /* rgb(79,70,229) 主操作色 */
+    --title: #0F172A;            /* rgb(15,23,42) */
+    --subtitle: #6B7280;         /* rgb(107,114,128) */
+    --label: #374151;            /* rgb(55,65,81) */
+    --input-bg: #F9FAFC;         /* rgb(249,250,252) */
+    --placeholder: #9CA3AF;      /* rgb(156,163,175) */
+    --icon-bg: #EEF2FF;          /* rgb(238,242,255) */
+    --font: 'Sarasa Gothic SC', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', -apple-system, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    background: #E9EDF3;
+    font-family: var(--font);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* 1280x800 画布视口，居中并自适应缩放 */
+  .stage {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: auto;
+  }
+  .viewport {
+    position: relative;
+    width: 1280px;
+    height: 800px;
+    flex: 0 0 auto;
+    background: var(--page-bg);
+    overflow: hidden;
+    transform-origin: center center;
+  }
+
+  .screen {
+    position: absolute;
+    inset: 0;
+    width: 1280px;
+    height: 800px;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+  }
+  .screen.active { display: flex; }
+
+  /* 品牌标识（登录 / 注册屏顶部） */
+  .brand {
+    margin-top: 100px;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0.5px;
+  }
+  .login-screen .brand { margin-bottom: 48px; }   /* 170 - (100+22) */
+  .register-screen .brand { margin-bottom: 18px; } /* 140 - (100+22) */
+
+  /* 卡片 */
+  .card {
+    width: 440px;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 16px;
+    padding: 40px;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.10);
+    display: flex;
+    flex-direction: column;
+  }
+  .login-card { gap: 16px; }
+  .register-card { gap: 14px; }
+
+  .card .title {
+    font-size: 30px;
+    font-weight: 700;
+    color: var(--title);
+    line-height: 1.2;
+  }
+  .card .subtitle {
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--subtitle);
+  }
+
+  .field-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--label);
+  }
+  .input {
+    height: 46px;
+    width: 100%;
+    background: var(--input-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    padding: 0 14px;
+    font-family: var(--font);
+    font-size: 14px;
+    color: var(--title);
+    outline: none;
+    transition: border-color .15s ease, box-shadow .15s ease;
+  }
+  .input::placeholder { color: var(--placeholder); }
+  .input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+  }
+
+  /* 按钮行（登录屏：左登录 / 右注册） */
+  .btn-row {
+    display: flex;
+    gap: 12px;
+    margin-top: 0;
+  }
+  .btn {
+    height: 46px;
+    border: none;
+    border-radius: 10px;
+    font-family: var(--font);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: filter .15s ease, background .15s ease;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #FFFFFF;
+    flex: 1;
+  }
+  .btn-primary:hover { filter: brightness(1.06); }
+  .btn-secondary {
+    background: #FFFFFF;
+    color: var(--accent);
+    border: 1.5px solid var(--accent);
+    flex: 1;
+  }
+  .btn-secondary:hover { background: rgba(79, 70, 229, 0.05); }
+  .btn-full { width: 100%; }
+
+  .link {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    text-align: center;
+    cursor: pointer;
+    background: none;
+    border: none;
+    font-family: var(--font);
+    padding: 4px 0 0;
+  }
+  .link:hover { text-decoration: underline; }
+
+  .form-error {
+    font-size: 13px;
+    color: #DC2626;
+    min-height: 16px;
+    font-weight: 500;
+  }
+
+  /* ===== 第③屏 选择你的 KB ===== */
+  .kb-title {
+    margin-top: 120px;
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--title);
+    line-height: 1.2;
+    text-align: center;
+  }
+  .kb-subtitle {
+    margin-top: 19px;          /* 178 - (120+39) */
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--subtitle);
+    text-align: center;
+  }
+  .kb-grid {
+    margin-top: 55px;          /* 250 - (178+17) */
+    width: 760px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+  .kb-row {
+    display: flex;
+    gap: 24px;
+  }
+  .kb-card {
+    flex: 1;
+    width: 368px;
+    height: 84px;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    box-shadow: 0 6px 20px rgba(15, 23, 42, 0.08);
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    cursor: pointer;
+    transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+  }
+  .kb-card:hover {
+    border-color: var(--accent);
+    box-shadow: 0 6px 20px rgba(79, 70, 229, 0.18);
+    transform: translateY(-2px);
+  }
+  .kb-icon {
+    width: 44px;
+    height: 44px;
+    flex: 0 0 44px;
+    border-radius: 12px;
+    background: var(--icon-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .kb-text { display: flex; flex-direction: column; gap: 4px; }
+  .kb-name { font-size: 16px; font-weight: 600; color: var(--title); }
+  .kb-desc { font-size: 13px; font-weight: 400; color: var(--subtitle); }
+
+  .kb-hint {
+    margin-top: 168px;         /* 610 - (250+192) */
+    font-size: 13px;
+    color: var(--placeholder);
+    text-align: center;
+  }
+
+  /* ===== 登录后右上角用户栏 ===== */
+  .kb-userbar {
+    position: absolute;
+    top: 20px;
+    right: 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    z-index: 10;
+  }
+  .kb-username {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--title);
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    padding: 6px 16px;
+    border-radius: 999px;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+  }
+  .kb-logout {
+    height: 34px;
+    padding: 0 16px;
+    border: 1.5px solid var(--accent);
+    background: #fff;
+    color: var(--accent);
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: var(--font);
+    transition: background .15s ease;
+  }
+  .kb-logout:hover { background: rgba(79, 70, 229, 0.05); }
+
+  /* ===== 管理员后台（用户管理） ===== */
+  .admin-list {
+    margin-top: 36px;
+    width: 640px;
+    max-height: 380px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .admin-item {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    padding: 12px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .admin-account {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--title);
+  }
+  .admin-del {
+    height: 32px;
+    padding: 0 16px;
+    background: #DC2626;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: var(--font);
+  }
+  .admin-del:hover { background: #B91C1C; }
+  .admin-empty {
+    margin-top: 48px;
+    font-size: 14px;
+    color: var(--placeholder);
+    text-align: center;
+  }
+
+  /* ===== 神秘特色工作台 ===== */
+  .mystery-screen { overflow-y: auto; padding-bottom: 40px; }
+  .mystery-title { margin-top: 56px; }
+  .mystery-card {
+    margin-top: 20px;
+    width: 720px;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    padding: 20px 24px;
+    box-shadow: 0 6px 20px rgba(15, 23, 42, 0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .mystery-card-title { font-size: 16px; font-weight: 700; color: var(--title); }
+  .mystery-skills { display: flex; flex-wrap: wrap; gap: 10px; }
+  .mystery-skill {
+    background: var(--icon-bg);
+    color: var(--accent);
+    border-radius: 999px;
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: 600;
+  }
+  .mystery-result {
+    font-size: 14px;
+    color: var(--subtitle);
+    min-height: 22px;
+    text-align: center;
+    font-weight: 500;
+  }
+  .mystery-bar {
+    height: 14px;
+    background: var(--input-bg);
+    border-radius: 999px;
+    overflow: hidden;
+    border: 1px solid var(--card-border);
+  }
+  .mystery-bar-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #4F46E5, #8B5CF6, #EC4899);
+    border-radius: 999px;
+    transition: width .3s ease;
+  }
+  .mystery-bar-text {
+    font-size: 13px;
+    color: var(--subtitle);
+    text-align: center;
+  }
+
+  /* ===== 升级鸡术工作台 ===== */
+  .chicken-info {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--title);
+    text-align: center;
+  }
+  .chicken-sub {
+    font-size: 13px;
+    color: var(--subtitle);
+    text-align: center;
+  }
+
+  /* ===== 偷鸡技巧工作台 ===== */
+  .thief-card {
+    border: 1.5px dashed var(--accent);
+    border-radius: 12px;
+    padding: 18px;
+    text-align: center;
+    background: var(--icon-bg);
+  }
+  .thief-card-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 8px;
+  }
+  .thief-card-desc {
+    font-size: 14px;
+    color: var(--label);
+    line-height: 1.6;
+  }
+
+  /* ===== 个人秘籍工作台 ===== */
+  .secret-input {
+    width: 100%;
+    height: 96px;
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-family: var(--font);
+    font-size: 14px;
+    color: var(--title);
+    background: var(--input-bg);
+    outline: none;
+    resize: vertical;
+  }
+  .secret-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+  }
+  .secret-list { display: flex; flex-direction: column; gap: 10px; }
+  .secret-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: var(--input-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    padding: 10px 14px;
+  }
+  .secret-item-text { font-size: 14px; color: var(--label); flex: 1; }
+  .secret-item-del {
+    border: none;
+    background: none;
+    color: #DC2626;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: var(--font);
+    flex: 0 0 auto;
+  }
+
+  /* ===== 偷鸡三十六计：右下角名称按钮 + 弹窗 ===== */
+  .thief-trigger {
+    position: absolute;
+    right: 24px;
+    bottom: 24px;
+    height: 40px;
+    padding: 0 18px;
+    border: 1.5px solid var(--accent);
+    background: #fff;
+    color: var(--accent);
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: var(--font);
+    z-index: 20;
+  }
+  .thief-trigger:hover { background: rgba(79, 70, 229, 0.05); }
+  .modal-mask {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+  .modal-box {
+    width: 620px;
+    max-height: 70vh;
+    background: #fff;
+    border-radius: 16px;
+    padding: 28px 32px;
+    box-shadow: 0 20px 50px rgba(15, 23, 42, 0.3);
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .modal-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--title);
+    text-align: center;
+  }
+  .modal-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    overflow-y: auto;
+    max-height: 46vh;
+  }
+  .modal-item {
+    background: var(--input-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--label);
+    text-align: center;
+  }
+
+  /* ===== 升级鸡术：每日任务栏 ===== */
+  .task-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: var(--input-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    padding: 10px 14px;
+  }
+  .task-main { display: flex; flex-direction: column; gap: 2px; }
+  .task-text { font-size: 14px; font-weight: 600; color: var(--title); }
+  .task-reward { font-size: 12px; color: var(--accent); font-weight: 600; }
+  .task-side { display: flex; align-items: center; gap: 10px; }
+  .task-status { font-size: 13px; font-weight: 600; color: var(--subtitle); }
+  .task-status.done { color: #2E7D32; }
+  .task-status.ready { color: var(--accent); }
+  .task-btn {
+    height: 30px;
+    padding: 0 14px;
+    border: 1.5px solid var(--accent);
+    background: #fff;
+    color: var(--accent);
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: var(--font);
+  }
+  .task-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* ===== 飞升鸡斗台（未开放页） ===== */
+  .ascent-card { align-items: center; text-align: center; }
+  .ascent-emoji { font-size: 56px; line-height: 1.2; margin-bottom: 6px; }
+  .ascent-title { font-size: 22px; font-weight: 700; color: var(--accent); }
+  .ascent-desc {
+    font-size: 15px;
+    color: var(--label);
+    line-height: 1.9;
+  }
+
+  /* ===== 管理员后台：修改战鸡等级 ===== */
+  .admin-main { display: flex; flex-direction: column; gap: 2px; }
+  .admin-lv { font-size: 13px; color: var(--subtitle); }
+  .admin-ops { display: flex; align-items: center; gap: 8px; }
+  .admin-lvbtn {
+    height: 32px;
+    padding: 0 14px;
+    border: 1.5px solid var(--accent);
+    background: #fff;
+    color: var(--accent);
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: var(--font);
+  }
+  .admin-lvbtn:hover { background: rgba(79, 70, 229, 0.05); }
+  .modal-sub { font-size: 14px; color: var(--subtitle); text-align: center; }
+
+  /* 进入工作台后的极简提示条 */
+  .toast {
+    position: absolute;
+    left: 50%;
+    bottom: 60px;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--title);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 500;
+    padding: 12px 22px;
+    border-radius: 10px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .25s ease, transform .25s ease;
+    box-shadow: 0 10px 30px rgba(15,23,42,0.25);
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="viewport" id="viewport">
+
+    <!-- ① 登录界面 -->
+    <section class="screen login-screen active" id="screen-login">
+      <div class="brand">◆ KB 知识库</div>
+      <div class="card login-card">
+        <div class="title">登录你的账号</div>
+        <div class="subtitle">欢迎回来，请输入账号信息以继续</div>
+
+        <div class="field-label">账号</div>
+        <input class="input" id="login-account" type="text" placeholder="请输入账号" autocomplete="username" />
+
+        <div class="field-label">密码</div>
+        <input class="input" id="login-password" type="password" placeholder="请输入密码" autocomplete="current-password" />
+
+        <div class="form-error" id="login-error"></div>
+
+        <div class="btn-row">
+          <button class="btn btn-primary" id="btn-login">登录</button>
+          <button class="btn btn-secondary" id="btn-goto-register">注册</button>
+        </div>
+        <button class="link" id="btn-goto-admin">管理员登录</button>
+        <button class="link" id="btn-goto-user" style="display:none">返回普通登录</button>
+      </div>
+    </section>
+
+    <!-- ② 注册界面 -->
+    <section class="screen register-screen" id="screen-register">
+      <div class="brand">◆ KB 知识库</div>
+      <div class="card register-card">
+        <div class="title">注册新账号</div>
+        <div class="subtitle">创建账号以使用知识库服务</div>
+
+        <div class="field-label">账号</div>
+        <input class="input" id="reg-account" type="text" placeholder="请输入账号" autocomplete="username" />
+
+        <div class="field-label">密码</div>
+        <input class="input" id="reg-password" type="password" placeholder="请输入密码" autocomplete="new-password" />
+
+        <div class="field-label">再次输入密码</div>
+        <input class="input" id="reg-confirm" type="password" placeholder="请再次输入密码" autocomplete="new-password" />
+
+        <div class="form-error" id="reg-error"></div>
+
+        <button class="btn btn-primary btn-full" id="btn-register">注册</button>
+        <button class="link" id="btn-goto-login">已有账号？去登录</button>
+      </div>
+    </section>
+
+    <!-- ③ 选择你的 KB -->
+    <section class="screen kb-screen" id="screen-kb">
+      <!-- 右上角：当前用户 + 注销登录 -->
+      <div class="kb-userbar">
+        <span class="kb-username" id="kb-username"></span>
+        <button class="kb-logout" id="btn-logout">注销登录</button>
+      </div>
+      <div class="kb-title">选择你的KB</div>
+      <div class="kb-subtitle">请选择一个知识库开始使用</div>
+
+      <div class="kb-grid">
+        <div class="kb-row">
+          <div class="kb-card" data-kb="神秘特色">
+            <div class="kb-icon">神</div>
+            <div class="kb-text">
+              <div class="kb-name">神秘特色</div>
+              <div class="kb-desc">神秘又带劲，选它的人都懂，懂的都肘</div>
+            </div>
+          </div>
+          <div class="kb-card" data-kb="升级鸡术">
+            <div class="kb-icon">鸡</div>
+            <div class="kb-text">
+              <div class="kb-name">升级鸡术</div>
+              <div class="kb-desc">鸡你太美，技术升级顶呱呱，一根鸡腿顶三次培训</div>
+            </div>
+          </div>
+        </div>
+        <div class="kb-row">
+          <div class="kb-card" data-kb="偷鸡技巧大全">
+            <div class="kb-icon">偷</div>
+            <div class="kb-text">
+              <div class="kb-name">偷鸡技巧大全</div>
+              <div class="kb-desc">鸡不可失失不再来，偷完就跑，刺激又酸爽</div>
+            </div>
+          </div>
+          <div class="kb-card" data-kb="个人专属秘籍">
+            <div class="kb-icon">秘</div>
+            <div class="kb-text">
+              <div class="kb-name">个人专属秘籍</div>
+              <div class="kb-desc">独门秘籍自己看，谁偷看谁得请奶茶</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="kb-hint">选择后将进入该知识库工作台</div>
+      <div class="toast" id="kb-toast"></div>
+      <button class="thief-trigger" id="btn-ascent">🐔 飞升鸡斗台</button>
+    </section>
+
+    <!-- ④ 管理员后台（用户管理） -->
+    <section class="screen admin-screen" id="screen-admin">
+      <div class="kb-userbar">
+        <span class="kb-username">管理员</span>
+        <button class="kb-logout" id="btn-admin-logout">退出后台</button>
+      </div>
+      <div class="kb-title">用户管理</div>
+      <div class="kb-subtitle">管理已注册的用户账号，可删除用户</div>
+      <div class="admin-list" id="admin-list"></div>
+      <div class="admin-empty" id="admin-empty" style="display:none">暂无已注册用户</div>
+    </section>
+
+    <!-- ⑤ 神秘特色工作台 -->
+    <section class="screen mystery-screen" id="screen-mystery">
+      <div class="kb-userbar">
+        <span class="kb-username" id="mystery-username">神秘人</span>
+        <button class="kb-logout" id="btn-mystery-back">返回选择</button>
+      </div>
+      <div class="kb-title mystery-title">🌀 神秘特色工作台</div>
+      <div class="kb-subtitle">此地无银三百两，此处有宝一吨重</div>
+
+      <div class="mystery-card">
+        <div class="mystery-card-title">💥 神秘必杀技</div>
+        <div class="mystery-skills" id="mystery-skills"></div>
+      </div>
+
+      <div class="mystery-card">
+        <div class="mystery-card-title">🔮 神秘测试</div>
+        <button class="btn btn-primary btn-full" id="btn-mystery-test">点击召唤神秘力量</button>
+        <div class="mystery-result" id="mystery-test-result"></div>
+      </div>
+
+      <div class="mystery-card">
+        <div class="mystery-card-title">⚡ 肘击值修炼</div>
+        <div class="mystery-bar"><div class="mystery-bar-fill" id="mystery-bar-fill"></div></div>
+        <div class="mystery-bar-text" id="mystery-bar-text">肘击值 0 / 100</div>
+        <button class="btn btn-secondary btn-full" id="btn-mystery-elbow">肘一下，+15 肘力</button>
+      </div>
+    </section>
+
+    <!-- ⑥ 升级鸡术工作台 -->
+    <section class="screen mystery-screen" id="screen-chicken">
+      <div class="kb-userbar">
+        <span class="kb-username" id="chicken-username">神秘人</span>
+        <button class="kb-logout" id="btn-chicken-back">返回选择</button>
+      </div>
+      <div class="kb-title mystery-title">🐔 升级鸡术实验室</div>
+      <div class="kb-subtitle">你的专属战鸡，正在等待进化</div>
+
+      <div class="mystery-card">
+        <div class="mystery-card-title">🎮 战鸡状态</div>
+        <div class="chicken-info" id="chicken-info"></div>
+        <div class="chicken-sub">当前鸡腿：<span id="chicken-legs">0</span> 个（通过每日任务获取）</div>
+        <div class="mystery-bar"><div class="mystery-bar-fill" id="chicken-exp"></div></div>
+        <div class="mystery-bar-text" id="chicken-exp-text">经验 0 / 20</div>
+        <button class="btn btn-primary btn-full" id="btn-chicken-feed">投喂一个鸡腿（+10 经验）</button>
+        <div class="mystery-result" id="chicken-result"></div>
+      </div>
+
+      <div class="mystery-card">
+        <div class="mystery-card-title">📋 每日任务 · 鸡腿来源</div>
+        <div id="task-list"></div>
+      </div>
+    </section>
+
+    <!-- ⑦ 偷鸡技巧大全工作台 -->
+    <section class="screen mystery-screen" id="screen-thief">
+      <div class="kb-userbar">
+        <span class="kb-username" id="thief-username">神秘人</span>
+        <button class="kb-logout" id="btn-thief-back">返回选择</button>
+      </div>
+      <div class="kb-title mystery-title">🏃 偷鸡三十六计</div>
+      <div class="kb-subtitle">三十六计，计计偷鸡；每抽一卡，收获一门鸡生绝学</div>
+
+      <div class="mystery-card">
+        <div class="mystery-card-title">🎴 技巧抽卡</div>
+        <button class="btn btn-primary btn-full" id="btn-thief-draw">抽一条偷鸡技巧</button>
+        <div class="thief-card">
+          <div class="thief-card-title" id="thief-title">？</div>
+          <div class="thief-card-desc" id="thief-desc">点击上方按钮开始抽卡</div>
+        </div>
+        <div class="mystery-result" id="thief-count">已抽 0 条</div>
+      </div>
+
+      <button class="thief-trigger" id="btn-tips-list">📜 三十六计名称</button>
+    </section>
+
+    <!-- ⑧ 个人专属秘籍工作台 -->
+    <section class="screen mystery-screen" id="screen-secret">
+      <div class="kb-userbar">
+        <span class="kb-username" id="secret-username">神秘人</span>
+        <button class="kb-logout" id="btn-secret-back">返回选择</button>
+      </div>
+      <div class="kb-title mystery-title">📖 个人专属秘籍</div>
+      <div class="kb-subtitle">写下你的独门秘籍，永藏此地</div>
+
+      <div class="mystery-card">
+        <div class="mystery-card-title">✍️ 撰写秘籍</div>
+        <textarea class="secret-input" id="secret-input" placeholder="在此写下你的独门绝学…"></textarea>
+        <button class="btn btn-primary btn-full" id="btn-secret-save">保存秘籍</button>
+        <div class="mystery-result" id="secret-msg"></div>
+      </div>
+
+      <div class="mystery-card">
+        <div class="mystery-card-title">📜 已存秘籍</div>
+        <div class="secret-list" id="secret-list"></div>
+      </div>
+    </section>
+
+    <!-- ⑨ 飞升鸡斗台（未开放） -->
+    <section class="screen mystery-screen" id="screen-ascent">
+      <div class="kb-userbar">
+        <span class="kb-username">飞升鸡斗台</span>
+        <button class="kb-logout" id="btn-ascent-back">返回选择</button>
+      </div>
+      <div class="kb-title mystery-title">🐔 飞升鸡斗台</div>
+      <div class="kb-subtitle">小鸡飞升，在此一战</div>
+
+      <div class="mystery-card ascent-card">
+        <div class="ascent-emoji">🚧🐔🚧</div>
+        <div class="ascent-title">功能暂未开放</div>
+        <div class="ascent-desc">
+          飞升鸡斗台正在加紧施工中：<br>
+          舞台还没搭好，裁判鸡还没上岗，<br>
+          连开场鸡鸣都还在彩排。<br><br>
+          预计开放时间：等鸡吃完再说。<br>
+          建议你先回去喂喂战鸡、攒攒鸡腿，<br>
+          到时候，我们鸡场上见！🐔
+        </div>
+        <button class="btn btn-primary btn-full" id="btn-ascent-close">行吧，先回撤</button>
+      </div>
+    </section>
+
+    <!-- 偷鸡三十六计 · 全部名称弹窗 -->
+    <div class="modal-mask" id="tips-modal" style="display:none">
+      <div class="modal-box">
+        <div class="modal-title">偷鸡三十六计 · 全部名称</div>
+        <div class="modal-grid" id="tips-name-grid"></div>
+        <button class="btn btn-primary btn-full" id="btn-tips-close">关闭</button>
+      </div>
+    </div>
+
+    <!-- 管理员：修改战鸡等级弹窗 -->
+    <div class="modal-mask" id="lv-modal" style="display:none">
+      <div class="modal-box">
+        <div class="modal-title">修改战鸡等级</div>
+        <div class="modal-sub" id="lv-info"></div>
+        <input class="input" id="lv-input" type="number" min="1" max="10" placeholder="输入 1-10 级" />
+        <button class="btn btn-primary btn-full" id="btn-lv-confirm">确定修改</button>
+        <button class="btn btn-secondary btn-full" id="btn-lv-cancel">取消</button>
+      </div>
+    </div>
+
+    <!-- 管理员：修改鸡腿数量弹窗 -->
+    <div class="modal-mask" id="legs-modal" style="display:none">
+      <div class="modal-box">
+        <div class="modal-title">修改鸡腿数量</div>
+        <div class="modal-sub" id="legs-info"></div>
+        <input class="input" id="legs-input" type="number" min="0" placeholder="输入鸡腿数量（非负整数）" />
+        <button class="btn btn-primary btn-full" id="btn-legs-confirm">确定修改</button>
+        <button class="btn btn-secondary btn-full" id="btn-legs-cancel">取消</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // ---------- 屏幕切换 ----------
+  const screens = {
+    login: document.getElementById('screen-login'),
+    register: document.getElementById('screen-register'),
+    kb: document.getElementById('screen-kb'),
+    admin: document.getElementById('screen-admin'),
+    mystery: document.getElementById('screen-mystery'),
+    chicken: document.getElementById('screen-chicken'),
+    thief: document.getElementById('screen-thief'),
+    secret: document.getElementById('screen-secret'),
+    ascent: document.getElementById('screen-ascent'),
+  };
+  let currentUser = '';   // 当前登录用户（工作台右上角显示）
+  function show(name) {
+    Object.values(screens).forEach(s => s.classList.remove('active'));
+    screens[name].classList.add('active');
+  }
+
+  // ---------- 注册信息持久化（mock 后端存储，多用户列表） ----------
+  const USERS_KEY = 'kb_users';
+  const ADMIN_ACCOUNT = 'yyhrzcmc';
+  const ADMIN_PASSWORD = '65qNrnB7uyB8';
+
+  function getUsers() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
+      if (Array.isArray(raw)) return raw;
+      return raw ? [raw] : [];   // 兼容旧版单用户格式
+    } catch (e) { return []; }
+  }
+  function saveUsers(users) {
+    localStorage.setItem(USERS_KEY, JSON.stringify(users));
+  }
+  function saveUser(account, password) {
+    const users = getUsers();
+    const idx = users.findIndex(u => u.account === account);
+    if (idx >= 0) users[idx] = { account, password };
+    else users.push({ account, password });
+    saveUsers(users);
+  }
+  function findUser(account) {
+    return getUsers().find(u => u.account === account) || null;
+  }
+
+  // ---------- 游戏数据持久化（按用户存储：战鸡 / 鸡腿 / 肘击值 / 每日任务） ----------
+  const USERS_DATA_KEY = 'kb_users_data';
+  function todayStr() {
+    const d = new Date();
+    return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+  }
+  function defaultUserData() {
+    return {
+      legs: 0, chickenLv: 1, chickenExp: 0, elbow: 0,
+      daily: { date: todayStr(), testCount: 0, drawCount: 0, noteCount: 0, task1: false, task2: false, task3: false, task4: false },
+    };
+  }
+  function getUsersData() {
+    try {
+      const r = JSON.parse(localStorage.getItem(USERS_DATA_KEY) || '{}');
+      return r && typeof r === 'object' ? r : {};
+    } catch (e) { return {}; }
+  }
+  function saveUsersData(map) { localStorage.setItem(USERS_DATA_KEY, JSON.stringify(map)); }
+  function getData(account) {
+    const acct = account || 'guest';
+    const map = getUsersData();
+    let d = map[acct] || null;
+    if (!d || typeof d !== 'object') d = defaultUserData();
+    if (!d.daily || d.daily.date !== todayStr()) d.daily = defaultUserData().daily;
+    d.legs = d.legs || 0;
+    d.chickenLv = d.chickenLv || 1;
+    d.chickenExp = d.chickenExp || 0;
+    d.elbow = d.elbow || 0;
+    return d;
+  }
+  function saveData(account, d) {
+    const map = getUsersData();
+    map[account || 'guest'] = d;
+    saveUsersData(map);
+  }
+  function getCurData() { return getData(currentUser); }
+  function saveCurData(d) { saveData(currentUser, d); }
+
+  function clearError(id) { document.getElementById(id).textContent = ''; }
+
+  // ---------- 登录 → 注册 ----------
+  document.getElementById('btn-goto-register').addEventListener('click', () => {
+    clearError('login-error');
+    show('register');
+  });
+
+  // ---------- 注册 → 回到登录 ----------
+  document.getElementById('btn-goto-login').addEventListener('click', () => {
+    clearError('reg-error');
+    show('login');
+  });
+
+  document.getElementById('btn-register').addEventListener('click', () => {
+    const account = document.getElementById('reg-account').value.trim();
+    const pw = document.getElementById('reg-password').value;
+    const cf = document.getElementById('reg-confirm').value;
+    const err = document.getElementById('reg-error');
+
+    if (!account || !pw || !cf) {
+      err.textContent = '请填写全部字段';
+      return;
+    }
+    if (pw !== cf) {
+      err.textContent = '两次输入的密码不一致';
+      return;
+    }
+    // 保存注册信息（mock）
+    saveUser(account, pw);
+    err.textContent = '';
+    // 回到登录页，并预填账号
+    document.getElementById('login-account').value = account;
+    document.getElementById('login-password').value = '';
+    show('login');
+  });
+
+  // ---------- 登录模式切换（普通 / 管理员） ----------
+  let isAdminMode = false;
+  const loginTitle = document.querySelector('.login-card .title');
+  const loginSubtitle = document.querySelector('.login-card .subtitle');
+  const btnRegister = document.getElementById('btn-goto-register');
+  const btnLogin = document.getElementById('btn-login');
+
+  document.getElementById('btn-goto-admin').addEventListener('click', () => {
+    isAdminMode = true;
+    loginTitle.textContent = '管理员登录';
+    loginSubtitle.textContent = '管理员专属入口，请输入管理员账号密码';
+    btnLogin.textContent = '管理员登录';
+    btnRegister.style.display = 'none';
+    document.getElementById('btn-goto-admin').style.display = 'none';
+    document.getElementById('btn-goto-user').style.display = '';
+    clearError('login-error');
+  });
+  document.getElementById('btn-goto-user').addEventListener('click', () => {
+    isAdminMode = false;
+    loginTitle.textContent = '登录你的账号';
+    loginSubtitle.textContent = '欢迎回来，请输入账号信息以继续';
+    btnLogin.textContent = '登录';
+    btnRegister.style.display = '';
+    document.getElementById('btn-goto-admin').style.display = '';
+    document.getElementById('btn-goto-user').style.display = 'none';
+    clearError('login-error');
+  });
+
+  // ---------- 登录 → 进入 KB 选择 / 管理员后台 ----------
+  document.getElementById('btn-login').addEventListener('click', () => {
+    const account = document.getElementById('login-account').value.trim();
+    const pw = document.getElementById('login-password').value;
+    const err = document.getElementById('login-error');
+
+    if (!account || !pw) {
+      err.textContent = '请输入账号和密码';
+      return;
+    }
+
+    // 管理员模式
+    if (isAdminMode) {
+      if (account === ADMIN_ACCOUNT && pw === ADMIN_PASSWORD) {
+        err.textContent = '';
+        show('admin');
+        renderAdminList();
+      } else {
+        err.textContent = '管理员账号或密码不正确';
+      }
+      return;
+    }
+
+    // 普通用户登录
+    const saved = findUser(account);
+    if (saved && pw !== saved.password) {
+      err.textContent = '账号或密码不正确';
+      return;
+    }
+    // 校验通过 → 进入 KB 选择页，右上角显示当前用户
+    err.textContent = '';
+    currentUser = account;
+    document.getElementById('kb-username').textContent = account;
+    show('kb');
+  });
+
+  // ---------- 管理员后台：用户列表 & 删除 & 修改战鸡等级/鸡腿 ----------
+  let editingLvAccount = null;
+  let editingLegsAccount = null;
+  function renderAdminList() {
+    const users = getUsers();
+    const list = document.getElementById('admin-list');
+    const empty = document.getElementById('admin-empty');
+    list.innerHTML = '';
+    if (users.length === 0) {
+      empty.style.display = 'block';
+      return;
+    }
+    empty.style.display = 'none';
+    users.forEach((u, i) => {
+      const ud = getData(u.account);
+      const row = document.createElement('div');
+      row.className = 'admin-item';
+      const info = document.createElement('div');
+      info.className = 'admin-main';
+      const acct = document.createElement('div');
+      acct.className = 'admin-account';
+      acct.textContent = u.account;
+      const lv = document.createElement('div');
+      lv.className = 'admin-lv';
+      lv.textContent = '战鸡 Lv.' + ud.chickenLv + ' · 🍗 ' + ud.legs + ' 个';
+      info.appendChild(acct);
+      info.appendChild(lv);
+      const ops = document.createElement('div');
+      ops.className = 'admin-ops';
+      const lvBtn = document.createElement('button');
+      lvBtn.className = 'admin-lvbtn';
+      lvBtn.textContent = '改等级';
+      lvBtn.addEventListener('click', () => {
+        editingLvAccount = u.account;
+        document.getElementById('lv-info').textContent = '用户：' + u.account + '，当前战鸡 Lv.' + getData(u.account).chickenLv;
+        document.getElementById('lv-input').value = '';
+        document.getElementById('lv-modal').style.display = 'flex';
+      });
+      const del = document.createElement('button');
+      del.className = 'admin-del';
+      del.textContent = '删除';
+      del.addEventListener('click', () => {
+        users.splice(i, 1);
+        saveUsers(users);
+        renderAdminList();
+      });
+      ops.appendChild(lvBtn);
+      const legsBtn = document.createElement('button');
+      legsBtn.className = 'admin-lvbtn';
+      legsBtn.textContent = '改鸡腿';
+      legsBtn.addEventListener('click', () => {
+        editingLegsAccount = u.account;
+        document.getElementById('legs-info').textContent = '用户：' + u.account + '，当前鸡腿：' + getData(u.account).legs + ' 个';
+        document.getElementById('legs-input').value = '';
+        document.getElementById('legs-modal').style.display = 'flex';
+      });
+      ops.appendChild(legsBtn);
+      ops.appendChild(del);
+      row.appendChild(info);
+      row.appendChild(ops);
+      list.appendChild(row);
+    });
+  }
+
+  // ---------- 管理员：修改战鸡等级弹窗 ----------
+  document.getElementById('btn-lv-confirm').addEventListener('click', () => {
+    if (!editingLvAccount) return;
+    const val = parseInt(document.getElementById('lv-input').value, 10);
+    if (!val || val < 1 || val > 10) {
+      document.getElementById('lv-info').textContent = '请输入 1-10 之间的等级';
+      return;
+    }
+    const d = getData(editingLvAccount);
+    d.chickenLv = val;
+    saveData(editingLvAccount, d);
+    document.getElementById('lv-modal').style.display = 'none';
+    renderAdminList();
+  });
+  document.getElementById('btn-lv-cancel').addEventListener('click', () => {
+    document.getElementById('lv-modal').style.display = 'none';
+  });
+
+  // ---------- 管理员：修改鸡腿数量弹窗 ----------
+  document.getElementById('btn-legs-confirm').addEventListener('click', () => {
+    if (!editingLegsAccount) return;
+    const val = parseInt(document.getElementById('legs-input').value, 10);
+    if (isNaN(val) || val < 0) {
+      document.getElementById('legs-info').textContent = '请输入非负整数';
+      return;
+    }
+    const d = getData(editingLegsAccount);
+    d.legs = val;
+    saveData(editingLegsAccount, d);
+    document.getElementById('legs-modal').style.display = 'none';
+    renderAdminList();
+  });
+  document.getElementById('btn-legs-cancel').addEventListener('click', () => {
+    document.getElementById('legs-modal').style.display = 'none';
+  });
+  document.getElementById('btn-admin-logout').addEventListener('click', () => {
+    show('login');
+  });
+
+  // ---------- 注销登录 ----------
+  document.getElementById('btn-logout').addEventListener('click', () => {
+    // 清除右上角用户信息、清空密码，回到登录页
+    document.getElementById('kb-username').textContent = '';
+    document.getElementById('login-password').value = '';
+    show('login');
+  });
+
+  // ---------- KB 卡片选择 ----------
+  const toast = document.getElementById('kb-toast');
+  let toastTimer = null;
+  document.querySelectorAll('.kb-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const name = card.getAttribute('data-kb');
+      if (name === '神秘特色') { enterMystery(); return; }
+      if (name === '升级鸡术') { enterChicken(); return; }
+      if (name === '偷鸡技巧大全') { enterThief(); return; }
+      if (name === '个人专属秘籍') { enterSecret(); return; }
+      toast.textContent = '已进入「' + name + '」工作台';
+      toast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('show'), 2200);
+    });
+  });
+
+  // ---------- 神秘特色工作台 ----------
+  const MYSTERY_SKILLS = ['无影肘', '回旋肘', '肘击过肩摔', '鸳鸯肘', '飞天神肘', '关门肘', '泰山压肘', '九连肘'];
+  const MYSTERY_QUOTES = [
+    '你今天的运气：肘气冲天，诸事顺利！',
+    '神秘提示：你的肘力已达化境，慎用。',
+    '测出你是：神秘的人，神秘的事，神秘的肘。',
+    '今日宜肘击，忌躺平。',
+    '神秘值已充值到账，请查收。',
+    '你的神秘等级：S 级神秘人，走路都带风。',
+    '神秘戒律第一条：肘前先礼，肘后就走。',
+    '恭喜你抽中了「神秘体验卡」，有效期：永远。',
+  ];
+
+  function enterMystery() {
+    document.getElementById('mystery-username').textContent = currentUser || '神秘人';
+    document.getElementById('mystery-test-result').textContent = '';
+    renderSkills();
+    updateElbowBar();
+    show('mystery');
+  }
+
+  function renderSkills() {
+    const box = document.getElementById('mystery-skills');
+    box.innerHTML = '';
+    MYSTERY_SKILLS.forEach(s => {
+      const chip = document.createElement('span');
+      chip.className = 'mystery-skill';
+      chip.textContent = s;
+      box.appendChild(chip);
+    });
+  }
+
+  function updateElbowBar() {
+    const d = getCurData();
+    document.getElementById('mystery-bar-fill').style.width = d.elbow + '%';
+    document.getElementById('mystery-bar-text').textContent = '肘击值 ' + d.elbow + ' / 100';
+  }
+
+  document.getElementById('btn-mystery-test').addEventListener('click', () => {
+    const q = MYSTERY_QUOTES[Math.floor(Math.random() * MYSTERY_QUOTES.length)];
+    document.getElementById('mystery-test-result').textContent = q;
+    const d = getCurData();
+    d.daily.testCount += 1;
+    saveCurData(d);
+  });
+
+  document.getElementById('btn-mystery-elbow').addEventListener('click', () => {
+    const d = getCurData();
+    d.elbow = Math.min(100, d.elbow + 15);
+    saveCurData(d);
+    updateElbowBar();
+    if (d.elbow >= 100) {
+      document.getElementById('mystery-test-result').textContent = '肘击值已满！去升级鸡术任务栏领取鸡腿吧！';
+    } else {
+      document.getElementById('mystery-test-result').textContent = '肘力 +15，继续肘！';
+    }
+  });
+
+  document.getElementById('btn-mystery-back').addEventListener('click', () => {
+    show('kb');
+  });
+
+  // ---------- 升级鸡术工作台（战鸡养成 + 每日任务） ----------
+  const CHICKEN_TITLES = [
+    '🐤 小鸡仔', '🐔 鸡中精英', '🐓 战斗鸡', '🦅 凤凰之鸡', '🌟 鸡你太美传说',
+    '👑 鸡界霸主', '🔥 神鸡天降', '⚡ 雷震战鸡', '🌌 宇宙无敌鸡', '🏆 鸡神·万鸡之主',
+  ];
+  const CHICKEN_MAX_LV = CHICKEN_TITLES.length;
+  function expNeed(lv) { return lv * 20; }
+
+  function enterChicken() {
+    document.getElementById('chicken-username').textContent = currentUser || '神秘人';
+    document.getElementById('chicken-result').textContent = '';
+    updateChicken();
+    renderTasks();
+    show('chicken');
+  }
+
+  function updateChicken() {
+    const d = getCurData();
+    document.getElementById('chicken-info').textContent = CHICKEN_TITLES[d.chickenLv - 1] + '  ·  Lv.' + d.chickenLv;
+    const need = expNeed(d.chickenLv);
+    document.getElementById('chicken-exp').style.width = Math.min(100, d.chickenExp / need * 100) + '%';
+    document.getElementById('chicken-exp-text').textContent = '经验 ' + d.chickenExp + ' / ' + need;
+    document.getElementById('chicken-legs').textContent = d.legs;
+  }
+
+  document.getElementById('btn-chicken-feed').addEventListener('click', () => {
+    const d = getCurData();
+    const msg = document.getElementById('chicken-result');
+    if (d.legs <= 0) {
+      msg.textContent = '鸡腿不够啦！先去完成每日任务赚鸡腿吧。';
+      return;
+    }
+    d.legs -= 1;
+    d.chickenExp += 10;
+    const need = expNeed(d.chickenLv);
+    if (d.chickenExp >= need) {
+      if (d.chickenLv >= CHICKEN_MAX_LV) {
+        d.chickenExp = need;
+        msg.textContent = '已到达满级！你的战鸡已进化成「' + CHICKEN_TITLES[CHICKEN_MAX_LV - 1] + '」，鸡生圆满！';
+      } else {
+        d.chickenExp -= need;
+        d.chickenLv++;
+        msg.textContent = '🎉 升级！你的战鸡进化成「' + CHICKEN_TITLES[d.chickenLv - 1] + '」！';
+      }
+    } else {
+      msg.textContent = '鸡腿真香，经验 +10。';
+    }
+    saveCurData(d);
+    updateChicken();
+  });
+
+  // ---------- 每日任务（每天只能完成一次） ----------
+  function renderTasks() {
+    const d = getCurData();
+    const list = document.getElementById('task-list');
+    const tasks = [
+      { id: 1, text: '① 在神秘特色工作台修满肘击值', reward: '奖励 2 个鸡腿', done: d.daily.task1, ready: (!d.daily.task1 && d.elbow >= 100), prog: '肘击值 ' + d.elbow + ' / 100' },
+      { id: 2, text: '② 神秘工作台召唤神秘测试 1 次', reward: '奖励 1 个鸡腿', done: d.daily.task2, ready: (!d.daily.task2 && d.daily.testCount >= 1), prog: '已测试 ' + d.daily.testCount + ' / 1' },
+      { id: 3, text: '③ 抽偷鸡技巧 5 次', reward: '奖励 2 个鸡腿', done: d.daily.task3, ready: (!d.daily.task3 && d.daily.drawCount >= 5), prog: '已抽 ' + d.daily.drawCount + ' / 5' },
+      { id: 4, text: '④ 新增一本个人专属秘籍', reward: '奖励 5 个鸡腿', done: d.daily.task4, ready: (!d.daily.task4 && d.daily.noteCount >= 1), prog: '已新增 ' + d.daily.noteCount + ' / 1' },
+    ];
+    list.innerHTML = '';
+    tasks.forEach(t => {
+      const item = document.createElement('div');
+      item.className = 'task-item';
+      const main = document.createElement('div');
+      main.className = 'task-main';
+      const text = document.createElement('div');
+      text.className = 'task-text';
+      text.textContent = t.text;
+      const reward = document.createElement('div');
+      reward.className = 'task-reward';
+      reward.textContent = t.reward;
+      main.appendChild(text);
+      main.appendChild(reward);
+      const side = document.createElement('div');
+      side.className = 'task-side';
+      const status = document.createElement('span');
+      status.className = 'task-status' + (t.done ? ' done' : (t.ready ? ' ready' : ''));
+      status.textContent = t.done ? '已领取' : (t.ready ? '可领取' : t.prog);
+      const btn = document.createElement('button');
+      btn.className = 'task-btn';
+      btn.textContent = '领取';
+      btn.disabled = !t.ready;
+      btn.addEventListener('click', () => claimTask(t.id));
+      side.appendChild(status);
+      side.appendChild(btn);
+      item.appendChild(main);
+      item.appendChild(side);
+      list.appendChild(item);
+    });
+  }
+
+  function claimTask(id) {
+    const d = getCurData();
+    if (d.daily['task' + id]) { renderTasks(); return; }
+    if (id === 1) {
+      if (d.elbow < 100) return;
+      d.legs += 2;
+      d.elbow = 0;            // 领取后肘击值重置
+    } else if (id === 2) {
+      if (d.daily.testCount < 1) return;
+      d.legs += 1;
+    } else if (id === 3) {
+      if (d.daily.drawCount < 5) return;
+      d.legs += 2;
+    } else if (id === 4) {
+      if (d.daily.noteCount < 1) return;
+      d.legs += 5;
+    }
+    d.daily['task' + id] = true;
+    saveCurData(d);
+    updateChicken();
+    renderTasks();
+  }
+
+  document.getElementById('btn-chicken-back').addEventListener('click', () => show('kb'));
+
+  // ---------- 偷鸡技巧工作台（技巧抽卡） ----------
+  const THIEF_TIPS = [
+    { t: '声东击西', d: '先大喊「鸡跑了！」，等主人回头去找，再从容下手。成功率：高。' },
+    { t: '浑水摸鸡', d: '趁鸡群混乱，混进去假装自己也是一只鸡，伺机动手。' },
+    { t: '守株待鸡', d: '蹲在原地等，等鸡自己跑过来。成功率：极低，慎用。' },
+    { t: '顺手牵鸡', d: '牵的时候要顺手，不顺手就是偷鸡不成蚀把米。' },
+    { t: '鸡飞狗跳', d: '让狗追鸡，鸡往你这边跑，你负责接住。主打一个配合。' },
+    { t: '隔空取鸡', d: '传说练成者不多，因为大多数人的手不够长。' },
+    { t: '欲擒故纵', d: '先放走一只鸡，等它带全家来报仇，一网打尽。' },
+    { t: '明修栈道', d: '当着主人的面喂鸡，喂着喂着，鸡就跟着你走了。' },
+    { t: '暗度陈仓', d: '表面假装欣赏风景，脚下早已悄悄踩住了鸡尾巴。' },
+    { t: '调虎离山', d: '扔根骨头引走看门狗，再把鸡平安带回家。' },
+    { t: '抛砖引玉', d: '撒一把米引出鸡群，专挑最肥的那只下手。' },
+    { t: '无中生有', d: '装作发现宝藏大声惊呼，趁人群围观，顺手薅鸡。' },
+    { t: '借刀杀鸡', d: '假意请邻居帮忙抓鸡，抓完再说是自己家的。' },
+    { t: '以逸待劳', d: '等主人去午睡，鸡也打盹，正是下手好时机。' },
+    { t: '趁火打劫', d: '主人忙着烧火炒菜，鸡已经到了你的怀里。' },
+    { t: '瞒天过海', d: '白天去串门寒暄，晚上鸡已经在你家锅里了。' },
+    { t: '反客为主', d: '大方坐到主人家，反手指使：「帮我抓只鸡来。」' },
+    { t: '笑里藏刀', d: '笑眯眯夸鸡养得肥，手上已经把篮子递了过去。' },
+    { t: '李代桃僵', d: '先抱只瘦鸡作掩护，把别人家的肥鸡牵走。' },
+    { t: '打草惊蛇', d: '故意惊动草丛里的蛇，鸡吓得直往你怀里钻。' },
+    { t: '借尸还魂', d: '捡根鸡毛插在头上，堂而皇之混进鸡群。' },
+    { t: '调兵遣将', d: '指挥一群小孩追鸡，你在旁边坐收渔翁之利。' },
+    { t: '金蝉脱壳', d: '被抓之前把鸡扔进河里，鸡跑了，你毫发无损。' },
+    { t: '关门捉鸡', d: '把鸡骗进仓库，关门，放……你自己上。' },
+    { t: '远交近攻', d: '先和隔壁家的鸡做朋友，再偷偷揍隔壁的鸡。' },
+    { t: '假道伐虢', d: '借口路过，顺手把主人家最肥的鸡也「借」走。' },
+    { t: '偷梁换柱', d: '把肥鸡换成瘦鸡，主人还连连夸你实在。' },
+    { t: '指桑骂槐', d: '对着树骂鸡，吓得鸡躲进你早就布好的网里。' },
+    { t: '假痴不癫', d: '站着装木头不动，鸡以为你没威胁，放松了警惕。' },
+    { t: '上层抽梯', d: '把鸡引上高台，撤掉梯子，鸡在上面急得团团转。' },
+    { t: '树上开花', d: '把鸡蛋挂在树上，让鸡自己爬上去找蛋。' },
+    { t: '反间计', d: '挑动两只公鸡互啄，你趁乱收编获胜的那只。' },
+    { t: '苦肉计', d: '假装被鸡啄伤，主人赔礼道歉，把鸡赔给你。' },
+    { t: '连环计', d: '声东击西 + 调虎离山 + 顺手牵鸡，一气呵成。' },
+    { t: '走为上计', d: '以上计策全不灵，趁天还没黑，赶紧跑！' },
+    { t: '三十六计最终奥义·鸡你太美', d: '唱跳 Rap 打篮球，鸡看到你都忍不住来围观，主动入笼。' },
+  ];
+  let thiefDrawCount = 0;
+  function enterThief() {
+    document.getElementById('thief-username').textContent = currentUser || '神秘人';
+    thiefDrawCount = 0;
+    document.getElementById('thief-count').textContent = '已抽 0 条';
+    document.getElementById('thief-title').textContent = '？';
+    document.getElementById('thief-desc').textContent = '点击上方按钮开始抽卡';
+    show('thief');
+  }
+  document.getElementById('btn-thief-draw').addEventListener('click', () => {
+    const tip = THIEF_TIPS[Math.floor(Math.random() * THIEF_TIPS.length)];
+    document.getElementById('thief-title').textContent = tip.t;
+    document.getElementById('thief-desc').textContent = tip.d;
+    thiefDrawCount++;
+    document.getElementById('thief-count').textContent = '已抽 ' + thiefDrawCount + ' 条';
+    const d = getCurData();
+    d.daily.drawCount += 1;   // 计入每日任务
+    saveCurData(d);
+  });
+  document.getElementById('btn-thief-back').addEventListener('click', () => show('kb'));
+
+  // ---------- 偷鸡三十六计：全部名称弹窗 ----------
+  document.getElementById('btn-tips-list').addEventListener('click', () => {
+    const grid = document.getElementById('tips-name-grid');
+    grid.innerHTML = '';
+    THIEF_TIPS.forEach((tip, i) => {
+      const item = document.createElement('div');
+      item.className = 'modal-item';
+      item.textContent = (i + 1) + '. ' + tip.t;
+      grid.appendChild(item);
+    });
+    document.getElementById('tips-modal').style.display = 'flex';
+  });
+  document.getElementById('btn-tips-close').addEventListener('click', () => {
+    document.getElementById('tips-modal').style.display = 'none';
+  });
+  document.getElementById('tips-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'tips-modal') {
+      document.getElementById('tips-modal').style.display = 'none';
+    }
+  });
+
+  // ---------- 个人专属秘籍工作台（秘籍记录本） ----------
+  const NOTES_KEY = 'kb_notes';
+  function getNotes() {
+    try {
+      const r = JSON.parse(localStorage.getItem(NOTES_KEY) || '[]');
+      return Array.isArray(r) ? r : [];
+    } catch (e) { return []; }
+  }
+  function saveNotes(notes) { localStorage.setItem(NOTES_KEY, JSON.stringify(notes)); }
+  function renderNotes() {
+    const notes = getNotes();
+    const list = document.getElementById('secret-list');
+    list.innerHTML = '';
+    if (notes.length === 0) {
+      list.innerHTML = '<div class="mystery-result" style="min-height:auto">暂无秘籍，快写一条吧！</div>';
+      return;
+    }
+    notes.forEach((text, i) => {
+      const item = document.createElement('div');
+      item.className = 'secret-item';
+      const span = document.createElement('span');
+      span.className = 'secret-item-text';
+      span.textContent = text;
+      const del = document.createElement('button');
+      del.className = 'secret-item-del';
+      del.textContent = '删除';
+      del.addEventListener('click', () => {
+        const n = getNotes();
+        n.splice(i, 1);
+        saveNotes(n);
+        renderNotes();
+      });
+      item.appendChild(span);
+      item.appendChild(del);
+      list.appendChild(item);
+    });
+  }
+  function enterSecret() {
+    document.getElementById('secret-username').textContent = currentUser || '神秘人';
+    document.getElementById('secret-input').value = '';
+    document.getElementById('secret-msg').textContent = '';
+    renderNotes();
+    show('secret');
+  }
+  document.getElementById('btn-secret-save').addEventListener('click', () => {
+    const val = document.getElementById('secret-input').value.trim();
+    const msg = document.getElementById('secret-msg');
+    if (!val) { msg.textContent = '秘籍内容不能为空！'; return; }
+    const notes = getNotes();
+    notes.unshift(val);
+    saveNotes(notes);
+    document.getElementById('secret-input').value = '';
+    msg.textContent = '✅ 秘籍已封存，天机不可泄露。';
+    const d = getCurData();
+    d.daily.noteCount += 1;   // 计入每日任务
+    saveCurData(d);
+    renderNotes();
+  });
+  document.getElementById('btn-secret-back').addEventListener('click', () => show('kb'));
+
+  // ---------- 飞升鸡斗台（未开放） ----------
+  document.getElementById('btn-ascent').addEventListener('click', () => show('ascent'));
+  document.getElementById('btn-ascent-back').addEventListener('click', () => show('kb'));
+  document.getElementById('btn-ascent-close').addEventListener('click', () => show('kb'));
+
+  // ---------- Enter 键提交 ----------
+  document.getElementById('login-password').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('btn-login').click();
+  });
+  document.getElementById('reg-confirm').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('btn-register').click();
+  });
+
+  // ---------- 视口自适应缩放 ----------
+  function fit() {
+    const vp = document.getElementById('viewport');
+    const scale = Math.min(window.innerWidth / 1280, window.innerHeight / 800, 1);
+    vp.style.transform = 'scale(' + scale + ')';
+  }
+  window.addEventListener('resize', fit);
+  fit();
+</script>
+</body>
+</html>
