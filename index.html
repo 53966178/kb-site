@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>KB 知识库 · 登录 / 注册</title>
 <!-- CloudBase Web SDK -->
-<script src="https://static.cloudbase.net/static/js-sdk/index.js"></script>
+<script src="https://static.cloudbase.net/cloudbase-js-sdk/2.17.3/cloudbase.full.js"></script>
 <style>
   :root {
     /* 严格继承设计稿设计令牌 */
@@ -895,8 +895,18 @@
   let cdb = null;
   if (typeof cloudbase !== 'undefined') {
     try {
-      cdb = cloudbase.init({ env: CLOUDBASE_ENV }).database();
-    } catch (e) { cdb = null; }
+      const app = cloudbase.init({ env: CLOUDBASE_ENV });
+      cdb = app.database();
+      // CloudBase 需要登录后才能访问数据库 → 匿名登录
+      const tryAnon = () => {
+        if (typeof app.auth === 'function') return app.auth().signInAnonymously();
+        if (app.auth && typeof app.auth.signInAnonymously === 'function') return app.auth.signInAnonymously();
+        return Promise.resolve();
+      };
+      tryAnon().then(() => {
+        pullFromCloud();   // 登录成功后从云端拉取数据
+      }).catch(e => console.error('CloudBase 匿名登录失败:', e));
+    } catch (e) { console.error('CloudBase 初始化失败:', e); cdb = null; }
   }
 
   // 内存缓存（数据源）；localStorage 仅作启动缓存
@@ -916,9 +926,9 @@
   async function pullFromCloud() {
     if (!cdb) return false;
     try {
-      const ures = await cdb.collection(USERS_COL).limit(1000).get();
+      const ures = await cdb.collection(USERS_COL).limit(100).get();
       usersCache = ures.data.map(u => ({ account: u.account, password: u.password }));
-      const dres = await cdb.collection(DATA_COL).limit(1000).get();
+      const dres = await cdb.collection(DATA_COL).limit(100).get();
       dataCache = {};
       dres.data.forEach(r => {
         dataCache[r.account] = {
@@ -928,17 +938,17 @@
       });
       persistLocal();
       return true;
-    } catch (e) { return false; }
+    } catch (e) { console.error('CloudBase 拉取失败:', e); return false; }
   }
 
   // 用户列表全量推送到云端
   async function pushUsersToCloud() {
     if (!cdb) return;
     try {
-      const res = await cdb.collection(USERS_COL).limit(1000).get();
+      const res = await cdb.collection(USERS_COL).limit(100).get();
       for (const u of res.data) await cdb.collection(USERS_COL).doc(u._id).remove();
       for (const u of usersCache) await cdb.collection(USERS_COL).add({ data: { account: u.account, password: u.password } });
-    } catch (e) { /* 云端不可用时静默，本地缓存仍可用 */ }
+    } catch (e) { console.error('CloudBase 推送用户失败:', e); }
   }
 
   // ---------- 用户列表（同步接口，操作内存缓存 + 云端） ----------
@@ -969,7 +979,7 @@
   async function pushDataToCloud() {
     if (!cdb) return;
     try {
-      const res = await cdb.collection(DATA_COL).limit(1000).get();
+      const res = await cdb.collection(DATA_COL).limit(100).get();
       const cloudMap = {};
       res.data.forEach(r => { cloudMap[r.account] = r._id; });
       for (const acct in dataCache) {
@@ -978,7 +988,7 @@
         if (cloudMap[acct]) await cdb.collection(DATA_COL).doc(cloudMap[acct]).update({ data });
         else await cdb.collection(DATA_COL).add({ data });
       }
-    } catch (e) { /* 云端不可用时静默 */ }
+    } catch (e) { console.error('CloudBase 推送数据失败:', e); }
   }
 
   function getData(account) {
@@ -1000,9 +1010,8 @@
   function getCurData() { return getData(currentUser); }
   function saveCurData(d) { saveData(currentUser, d); }
 
-  // ---------- 应用启动：加载本地缓存 + 拉取云端 ----------
+  // ---------- 应用启动：先加载本地缓存立即显示，云端拉取由匿名登录成功后触发 ----------
   loadLocal();
-  pullFromCloud();
 
   function clearError(id) { document.getElementById(id).textContent = ''; }
 
