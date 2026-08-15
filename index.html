@@ -846,7 +846,7 @@
       <div class="modal-box">
         <div class="modal-title">修改战鸡等级</div>
         <div class="modal-sub" id="lv-info"></div>
-        <input class="input" id="lv-input" type="number" min="1" max="10" placeholder="输入 1-10 级" />
+        <input class="input" id="lv-input" type="number" min="1" max="100" placeholder="输入 1-100 级" />
         <button class="btn btn-primary btn-full" id="btn-lv-confirm">确定修改</button>
         <button class="btn btn-secondary btn-full" id="btn-lv-cancel">取消</button>
       </div>
@@ -975,7 +975,7 @@
   function defaultUserData() {
     return {
       legs: 0, chickenLv: 1, chickenExp: 0, elbow: 0,
-      daily: { date: todayStr(), testCount: 0, drawCount: 0, noteCount: 0, task1: false, task2: false, task3: false, task4: false },
+      daily: { date: todayStr(), testCount: 0, drawCount: 0, noteCount: 0, task1: false, task2: false, task3: false, task4: false, checked: false },
     };
   }
 
@@ -1190,8 +1190,8 @@
   document.getElementById('btn-lv-confirm').addEventListener('click', () => {
     if (!editingLvAccount) return;
     const val = parseInt(document.getElementById('lv-input').value, 10);
-    if (!val || val < 1 || val > 10) {
-      document.getElementById('lv-info').textContent = '请输入 1-10 之间的等级';
+    if (!val || val < 1 || val > 100) {
+      document.getElementById('lv-info').textContent = '请输入 1-100 之间的等级';
       return;
     }
     const d = getData(editingLvAccount);
@@ -1317,7 +1317,10 @@
     '🐤 小鸡仔', '🐔 鸡中精英', '🐓 战斗鸡', '🦅 凤凰之鸡', '🌟 鸡你太美传说',
     '👑 鸡界霸主', '🔥 神鸡天降', '⚡ 雷震战鸡', '🌌 宇宙无敌鸡', '🏆 鸡神·万鸡之主',
   ];
-  const CHICKEN_MAX_LV = CHICKEN_TITLES.length;
+  const CHICKEN_MAX_LV = 100;   // 最高 100 级
+  function titleFor(lv) {
+    return CHICKEN_TITLES[Math.min(CHICKEN_TITLES.length - 1, Math.floor((lv - 1) / 10))];
+  }
   function expNeed(lv) { return lv * 20; }
 
   function enterChicken() {
@@ -1330,7 +1333,7 @@
 
   function updateChicken() {
     const d = getCurData();
-    document.getElementById('chicken-info').textContent = CHICKEN_TITLES[d.chickenLv - 1] + '  ·  Lv.' + d.chickenLv;
+    document.getElementById('chicken-info').textContent = titleFor(d.chickenLv) + '  ·  Lv.' + d.chickenLv;
     const need = expNeed(d.chickenLv);
     document.getElementById('chicken-exp').style.width = Math.min(100, d.chickenExp / need * 100) + '%';
     document.getElementById('chicken-exp-text').textContent = '经验 ' + d.chickenExp + ' / ' + need;
@@ -1350,11 +1353,11 @@
     if (d.chickenExp >= need) {
       if (d.chickenLv >= CHICKEN_MAX_LV) {
         d.chickenExp = need;
-        msg.textContent = '已到达满级！你的战鸡已进化成「' + CHICKEN_TITLES[CHICKEN_MAX_LV - 1] + '」，鸡生圆满！';
+        msg.textContent = '已到达满级！你的战鸡已进化成「' + titleFor(CHICKEN_MAX_LV) + '」，鸡生圆满！';
       } else {
         d.chickenExp -= need;
         d.chickenLv++;
-        msg.textContent = '🎉 升级！你的战鸡进化成「' + CHICKEN_TITLES[d.chickenLv - 1] + '」！';
+        msg.textContent = '🎉 升级！你的战鸡进化成「' + titleFor(d.chickenLv) + '」！';
       }
     } else {
       msg.textContent = '鸡腿真香，经验 +10。';
@@ -1368,6 +1371,7 @@
     const d = getCurData();
     const list = document.getElementById('task-list');
     const tasks = [
+      { id: 0, text: '📅 每日签到', reward: '奖励 5 个鸡腿', done: d.daily.checked, ready: !d.daily.checked, prog: '每日一次，别错过' },
       { id: 1, text: '① 在神秘特色工作台修满肘击值', reward: '奖励 2 个鸡腿', done: d.daily.task1, ready: (!d.daily.task1 && d.elbow >= 100), prog: '肘击值 ' + d.elbow + ' / 100' },
       { id: 2, text: '② 神秘工作台召唤神秘测试 1 次', reward: '奖励 1 个鸡腿', done: d.daily.task2, ready: (!d.daily.task2 && d.daily.testCount >= 1), prog: '已测试 ' + d.daily.testCount + ' / 1' },
       { id: 3, text: '③ 抽偷鸡技巧 5 次', reward: '奖励 2 个鸡腿', done: d.daily.task3, ready: (!d.daily.task3 && d.daily.drawCount >= 5), prog: '已抽 ' + d.daily.drawCount + ' / 5' },
@@ -1391,10 +1395,10 @@
       side.className = 'task-side';
       const status = document.createElement('span');
       status.className = 'task-status' + (t.done ? ' done' : (t.ready ? ' ready' : ''));
-      status.textContent = t.done ? '已领取' : (t.ready ? '可领取' : t.prog);
+      status.textContent = t.done ? (t.id === 0 ? '已签到' : '已领取') : (t.ready ? (t.id === 0 ? '可签到' : '可领取') : t.prog);
       const btn = document.createElement('button');
       btn.className = 'task-btn';
-      btn.textContent = '领取';
+      btn.textContent = t.id === 0 ? '签到' : '领取';
       btn.disabled = !t.ready;
       btn.addEventListener('click', () => claimTask(t.id));
       side.appendChild(status);
@@ -1407,6 +1411,16 @@
 
   function claimTask(id) {
     const d = getCurData();
+    // 每日签到（id=0）：每天一次，领 5 鸡腿
+    if (id === 0) {
+      if (d.daily.checked) { renderTasks(); return; }
+      d.legs += 5;
+      d.daily.checked = true;
+      saveCurData(d);
+      updateChicken();
+      renderTasks();
+      return;
+    }
     if (d.daily['task' + id]) { renderTasks(); return; }
     if (id === 1) {
       if (d.elbow < 100) return;
