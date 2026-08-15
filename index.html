@@ -927,13 +927,17 @@
     if (!cdb) return false;
     try {
       const ures = await cdb.collection(USERS_COL).limit(100).get();
-      usersCache = ures.data.map(u => ({ account: u.account, password: u.password }));
+      usersCache = ures.data.map(u => {
+        const src = (u && u.data) || u;   // CloudBase 字段存在 data 嵌套里
+        return { account: src.account, password: src.password };
+      }).filter(u => u.account);   // 过滤无账号的脏数据
       const dres = await cdb.collection(DATA_COL).limit(100).get();
       dataCache = {};
       dres.data.forEach(r => {
-        dataCache[r.account] = {
-          legs: r.legs, chickenLv: r.chickenLv, chickenExp: r.chickenExp, elbow: r.elbow,
-          daily: r.daily || defaultUserData().daily,
+        const src = (r && r.data) || r;
+        dataCache[src.account] = {
+          legs: src.legs, chickenLv: src.chickenLv, chickenExp: src.chickenExp, elbow: src.elbow,
+          daily: src.daily || defaultUserData().daily,
         };
       });
       persistLocal();
@@ -981,7 +985,10 @@
     try {
       const res = await cdb.collection(DATA_COL).limit(100).get();
       const cloudMap = {};
-      res.data.forEach(r => { cloudMap[r.account] = r._id; });
+      res.data.forEach(r => {
+        const src = (r && r.data) || r;
+        if (src.account) cloudMap[src.account] = r._id;
+      });
       for (const acct in dataCache) {
         const d = dataCache[acct];
         const data = { account: acct, legs: d.legs, chickenLv: d.chickenLv, chickenExp: d.chickenExp, elbow: d.elbow, daily: d.daily };
@@ -1155,9 +1162,10 @@
       const del = document.createElement('button');
       del.className = 'admin-del';
       del.textContent = '删除';
-      del.addEventListener('click', () => {
+      del.addEventListener('click', async () => {
         users.splice(i, 1);
         saveUsers(users);
+        await pushUsersToCloud();   // 等待云端同步完成，删除才生效
         renderAdminList();
       });
       ops.appendChild(lvBtn);
