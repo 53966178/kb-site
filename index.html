@@ -4,6 +4,8 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>KB 知识库 · 登录 / 注册</title>
+<!-- CloudBase Web SDK -->
+<script src="https://static.cloudbase.net/static/js-sdk/index.js"></script>
 <style>
   :root {
     /* 严格继承设计稿设计令牌 */
@@ -883,34 +885,75 @@
     screens[name].classList.add('active');
   }
 
-  // ---------- 注册信息持久化（mock 后端存储，多用户列表） ----------
-  const USERS_KEY = 'kb_users';
+  // ---------- CloudBase 云端数据层（用户 / 战鸡数据跨设备共享） ----------
+  const CLOUDBASE_ENV = 'kb-site-d0gnwbe32eefa1784';
+  const USERS_COL = 'GameUsers';
+  const DATA_COL = 'GameData';
   const ADMIN_ACCOUNT = 'yyhrzcmc';
   const ADMIN_PASSWORD = '65qNrnB7uyB8';
 
-  function getUsers() {
+  let cdb = null;
+  if (typeof cloudbase !== 'undefined') {
     try {
-      const raw = JSON.parse(localStorage.getItem(USERS_KEY) || '[]');
-      if (Array.isArray(raw)) return raw;
-      return raw ? [raw] : [];   // 兼容旧版单用户格式
-    } catch (e) { return []; }
-  }
-  function saveUsers(users) {
-    localStorage.setItem(USERS_KEY, JSON.stringify(users));
-  }
-  function saveUser(account, password) {
-    const users = getUsers();
-    const idx = users.findIndex(u => u.account === account);
-    if (idx >= 0) users[idx] = { account, password };
-    else users.push({ account, password });
-    saveUsers(users);
-  }
-  function findUser(account) {
-    return getUsers().find(u => u.account === account) || null;
+      cdb = cloudbase.init({ env: CLOUDBASE_ENV }).database();
+    } catch (e) { cdb = null; }
   }
 
-  // ---------- 游戏数据持久化（按用户存储：战鸡 / 鸡腿 / 肘击值 / 每日任务） ----------
-  const USERS_DATA_KEY = 'kb_users_data';
+  // 内存缓存（数据源）；localStorage 仅作启动缓存
+  let usersCache = [];
+  let dataCache = {};
+
+  function persistLocal() {
+    localStorage.setItem('kb_users_cache', JSON.stringify(usersCache));
+    localStorage.setItem('kb_data_cache', JSON.stringify(dataCache));
+  }
+  function loadLocal() {
+    try { usersCache = JSON.parse(localStorage.getItem('kb_users_cache') || '[]'); } catch (e) { usersCache = []; }
+    try { dataCache = JSON.parse(localStorage.getItem('kb_data_cache') || '{}'); } catch (e) { dataCache = {}; }
+  }
+
+  // 从云端拉取全量到缓存（成功则覆盖本地缓存）
+  async function pullFromCloud() {
+    if (!cdb) return false;
+    try {
+      const ures = await cdb.collection(USERS_COL).limit(1000).get();
+      usersCache = ures.data.map(u => ({ account: u.account, password: u.password }));
+      const dres = await cdb.collection(DATA_COL).limit(1000).get();
+      dataCache = {};
+      dres.data.forEach(r => {
+        dataCache[r.account] = {
+          legs: r.legs, chickenLv: r.chickenLv, chickenExp: r.chickenExp, elbow: r.elbow,
+          daily: r.daily || defaultUserData().daily,
+        };
+      });
+      persistLocal();
+      return true;
+    } catch (e) { return false; }
+  }
+
+  // 用户列表全量推送到云端
+  async function pushUsersToCloud() {
+    if (!cdb) return;
+    try {
+      const res = await cdb.collection(USERS_COL).limit(1000).get();
+      for (const u of res.data) await cdb.collection(USERS_COL).doc(u._id).remove();
+      for (const u of usersCache) await cdb.collection(USERS_COL).add({ data: { account: u.account, password: u.password } });
+    } catch (e) { /* 云端不可用时静默，本地缓存仍可用 */ }
+  }
+
+  // ---------- 用户列表（同步接口，操作内存缓存 + 云端） ----------
+  function getUsers() { return usersCache; }
+  function saveUsers(users) { usersCache = users; persistLocal(); pushUsersToCloud(); }
+  function saveUser(account, password) {
+    const idx = usersCache.findIndex(u => u.account === account);
+    if (idx >= 0) usersCache[idx] = { account, password };
+    else usersCache.push({ account, password });
+    persistLocal();
+    pushUsersToCloud();
+  }
+  function findUser(account) { return usersCache.find(u => u.account === account) || null; }
+
+  // ---------- 战鸡数据（同步接口，操作内存缓存 + 云端） ----------
   function todayStr() {
     const d = new Date();
     return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
@@ -921,17 +964,26 @@
       daily: { date: todayStr(), testCount: 0, drawCount: 0, noteCount: 0, task1: false, task2: false, task3: false, task4: false },
     };
   }
-  function getUsersData() {
+
+  // 战鸡数据增量推送到云端
+  async function pushDataToCloud() {
+    if (!cdb) return;
     try {
-      const r = JSON.parse(localStorage.getItem(USERS_DATA_KEY) || '{}');
-      return r && typeof r === 'object' ? r : {};
-    } catch (e) { return {}; }
+      const res = await cdb.collection(DATA_COL).limit(1000).get();
+      const cloudMap = {};
+      res.data.forEach(r => { cloudMap[r.account] = r._id; });
+      for (const acct in dataCache) {
+        const d = dataCache[acct];
+        const data = { account: acct, legs: d.legs, chickenLv: d.chickenLv, chickenExp: d.chickenExp, elbow: d.elbow, daily: d.daily };
+        if (cloudMap[acct]) await cdb.collection(DATA_COL).doc(cloudMap[acct]).update({ data });
+        else await cdb.collection(DATA_COL).add({ data });
+      }
+    } catch (e) { /* 云端不可用时静默 */ }
   }
-  function saveUsersData(map) { localStorage.setItem(USERS_DATA_KEY, JSON.stringify(map)); }
+
   function getData(account) {
     const acct = account || 'guest';
-    const map = getUsersData();
-    let d = map[acct] || null;
+    let d = dataCache[acct] || null;
     if (!d || typeof d !== 'object') d = defaultUserData();
     if (!d.daily || d.daily.date !== todayStr()) d.daily = defaultUserData().daily;
     d.legs = d.legs || 0;
@@ -941,12 +993,16 @@
     return d;
   }
   function saveData(account, d) {
-    const map = getUsersData();
-    map[account || 'guest'] = d;
-    saveUsersData(map);
+    dataCache[account || 'guest'] = d;
+    persistLocal();
+    pushDataToCloud();
   }
   function getCurData() { return getData(currentUser); }
   function saveCurData(d) { saveData(currentUser, d); }
+
+  // ---------- 应用启动：加载本地缓存 + 拉取云端 ----------
+  loadLocal();
+  pullFromCloud();
 
   function clearError(id) { document.getElementById(id).textContent = ''; }
 
