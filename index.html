@@ -685,6 +685,17 @@
         </div>
       </div>
 
+      <div class="mystery-card" style="margin-top:18px">
+        <div class="mystery-card-title">💾 存档管理</div>
+        <div class="chicken-sub" style="margin-bottom:10px">导出一份自己留着；换设备、清缓存或云端出问题时，导回来就能恢复。</div>
+        <div class="btn-row">
+          <button class="btn btn-secondary" id="btn-export-save">导出存档</button>
+          <button class="btn btn-secondary" id="btn-import-save">导入存档</button>
+        </div>
+        <input type="file" id="import-file" accept=".json,application/json" style="display:none">
+        <div class="mystery-result" id="save-msg" style="min-height:auto"></div>
+      </div>
+
       <div data-page-node-id="YASJk5cLXDGEam4sLpJ9n9" class="kb-hint"><!--pnid:P9e9HS47cFsmSYfucySYkP-->选择后将进入该区块的训练台</div>
       <div data-page-node-id="oCXLIOIT6nduWynK0xvmzm" class="toast" id="kb-toast"></div>
       <button data-page-node-id="qgUN6plcWoz75hILkfNfWq" class="thief-trigger" id="btn-ascent"><!--pnid:gSSoWvtoWSe1HAqTDeKPFy-->🐔 飞升鸡斗台</button>
@@ -913,7 +924,27 @@
   const USERS_COL = 'GameUsers';
   const DATA_COL = 'GameData';
   const ADMIN_ACCOUNT = 'yyhrzcmc';
-  const ADMIN_PASSWORD = '65qNrnB7uyB8';
+  // 密码一律只存 SHA-256 摘要（加固定盐），源码和数据库里都不再出现明文
+  const PW_SALT = 'kb-site::';
+  const ADMIN_PASSWORD_HASH = 'sha256:744adc4ec04d43c9d3245f153f4c0428022fc0d19efe5573c36cd24ceba1e226';
+
+  async function hashPw(pw) {
+    if (!(window.crypto && crypto.subtle && crypto.subtle.digest)) {
+      throw new Error('当前浏览器不支持加密接口，无法校验密码');
+    }
+    const data = new TextEncoder().encode(PW_SALT + pw);
+    const buf = await crypto.subtle.digest('SHA-256', data);
+    return 'sha256:' + Array.from(new Uint8Array(buf)).map(function (b) {
+      return b.toString(16).padStart(2, '0');
+    }).join('');
+  }
+  function isHashed(v) { return typeof v === 'string' && v.indexOf('sha256:') === 0; }
+  // 兼容历史明文数据：明文匹配成功后，由调用方负责升级成哈希
+  async function verifyPw(input, stored) {
+    if (!stored) return false;
+    if (isHashed(stored)) return (await hashPw(input)) === stored;
+    return stored === input;
+  }
 
   let cdb = null;
   if (typeof cloudbase !== 'undefined') {
@@ -947,19 +978,31 @@
     if (!cdb) return false;
     try {
       const ures = await cdb.collection(USERS_COL).limit(100).get();
-      usersCache = ures.data.map(u => {
+      const cloudUsers = ures.data.map(u => {
         const src = (u && u.data) || u;
         return { account: src.account, password: src.password };
       }).filter(u => u.account);
       const dres = await cdb.collection(DATA_COL).limit(100).get();
-      dataCache = {};
+      const cloudData = {};
       dres.data.forEach(r => {
         const src = (r && r.data) || r;
-        dataCache[src.account] = {
+        cloudData[src.account] = {
           legs: src.legs, chickenLv: src.chickenLv, chickenExp: src.chickenExp, elbow: src.elbow,
           daily: src.daily || defaultUserData().daily,
         };
       });
+      // 云端为空（环境刚建 / 被清空 / 同步没成功）时绝不覆盖本地，
+      // 反过来把本地已有的账号和进度推上去，避免"云一挂本地就被清空"
+      if (!cloudUsers.length && !Object.keys(cloudData).length) {
+        if (usersCache.length || Object.keys(dataCache).length) {
+          console.warn('云端为空，保留本地数据并回推');
+          pushUsersToCloud();
+          pushDataToCloud();
+        }
+        return false;
+      }
+      usersCache = cloudUsers;
+      dataCache = cloudData;
       persistLocal();
       return true;
     } catch (e) { console.error('CloudBase 拉取失败:', e); return false; }
@@ -1046,7 +1089,7 @@
     show('login');
   });
 
-  document.getElementById('btn-register').addEventListener('click', () => {
+  document.getElementById('btn-register').addEventListener('click', async () => {
     const account = document.getElementById('reg-account').value.trim();
     const pw = document.getElementById('reg-password').value;
     const cf = document.getElementById('reg-confirm').value;
@@ -1054,7 +1097,10 @@
 
     if (!account || !pw || !cf) { err.textContent = '请填写全部字段'; return; }
     if (pw !== cf) { err.textContent = '两次输入的密码不一致'; return; }
-    saveUser(account, pw);
+    if (findUser(account)) { err.textContent = '该账号已被注册，请直接登录'; return; }
+    try {
+      saveUser(account, await hashPw(pw));
+    } catch (e) { err.textContent = e.message; return; }
     err.textContent = '';
     document.getElementById('login-account').value = account;
     document.getElementById('login-password').value = '';
@@ -1088,26 +1134,32 @@
     clearError('login-error');
   });
 
-  document.getElementById('btn-login').addEventListener('click', () => {
+  document.getElementById('btn-login').addEventListener('click', async () => {
     const account = document.getElementById('login-account').value.trim();
     const pw = document.getElementById('login-password').value;
     const err = document.getElementById('login-error');
 
     if (!account || !pw) { err.textContent = '请输入账号和密码'; return; }
 
-    if (isAdminMode) {
-      if (account === ADMIN_ACCOUNT && pw === ADMIN_PASSWORD) {
-        err.textContent = '';
-        show('admin');
-        renderAdminList();
-      } else {
-        err.textContent = '管理员账号或密码不正确';
+    try {
+      if (isAdminMode) {
+        if (account === ADMIN_ACCOUNT && (await hashPw(pw)) === ADMIN_PASSWORD_HASH) {
+          err.textContent = '';
+          show('admin');
+          renderAdminList();
+        } else {
+          err.textContent = '管理员账号或密码不正确';
+        }
+        return;
       }
-      return;
-    }
 
-    const saved = findUser(account);
-    if (saved && pw !== saved.password) { err.textContent = '账号或密码不正确'; return; }
+      const saved = findUser(account);
+      if (!saved) { err.textContent = '这个账号还没有注册，请先点下方「注册账号」'; return; }
+      if (!(await verifyPw(pw, saved.password))) { err.textContent = '账号或密码不正确'; return; }
+      // 历史遗留的明文密码，登录成功后顺手升级成哈希
+      if (!isHashed(saved.password)) saveUser(account, await hashPw(pw));
+    } catch (e) { err.textContent = e.message; return; }
+
     err.textContent = '';
     currentUser = account;
     document.getElementById('kb-username').textContent = account;
@@ -1215,6 +1267,66 @@
     document.getElementById('kb-username').textContent = '';
     document.getElementById('login-password').value = '';
     show('login');
+  });
+
+  // ---------- 存档导出 / 导入（不依赖云端，随时能自己留一份） ----------
+  function exportSave() {
+    const msg = document.getElementById('save-msg');
+    const pack = {
+      app: 'kb-site',
+      version: 1,
+      account: currentUser,
+      exportedAt: new Date().toISOString(),
+      gameData: getCurData(),
+      wordMem: getMem(),
+      wordBook: getBook(),
+    };
+    const name = 'kb存档-' + (currentUser || 'guest') + '-' + todayStr() + '.json';
+    const blob = new Blob([JSON.stringify(pack, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 3000);
+    msg.textContent = '✅ 已导出：' + name;
+  }
+
+  function importSave(file) {
+    const msg = document.getElementById('save-msg');
+    const reader = new FileReader();
+    reader.onload = function () {
+      try {
+        const pack = JSON.parse(reader.result);
+        if (!pack || pack.app !== 'kb-site') throw new Error('这不是本应用的存档文件');
+        if (pack.gameData) saveCurData(pack.gameData);
+        if (pack.wordMem) saveMem(pack.wordMem);
+        if (pack.wordBook) saveBook(pack.wordBook);
+        updateChicken();
+        renderTasks();
+        updateWordStat();
+        renderBook();
+        msg.textContent = '✅ 存档已导入' +
+          (pack.account && pack.account !== currentUser ? '（存档来自账号「' + pack.account + '」，已存入当前账号）' : '') +
+          (pack.exportedAt ? '，导出时间 ' + String(pack.exportedAt).slice(0, 10) : '');
+      } catch (e) {
+        msg.textContent = '❌ 导入失败：' + e.message;
+      }
+    };
+    reader.onerror = function () { document.getElementById('save-msg').textContent = '❌ 文件读取失败'; };
+    reader.readAsText(file);
+  }
+
+  document.getElementById('btn-export-save').addEventListener('click', exportSave);
+  document.getElementById('btn-import-save').addEventListener('click', () => {
+    document.getElementById('import-file').click();
+  });
+  document.getElementById('import-file').addEventListener('change', function (e) {
+    const f = e.target.files && e.target.files[0];
+    if (f) importSave(f);
+    e.target.value = '';
   });
 
   // ---------- 区块卡片选择 ----------
@@ -5453,12 +5565,16 @@
   let quizCur = -1;
   let quizAnswered = false;
   let quizDrawCount = 0;
+  let quizOpts = [];   // 本次打乱顺序之后的选项
+  let quizAns = -1;    // 正确答案在打乱后的下标
 
   function enterThief() {
     document.getElementById('thief-username').textContent = currentUser || '神秘人';
     quizCur = -1;
     quizAnswered = false;
     quizDrawCount = 0;
+    quizOpts = [];
+    quizAns = -1;
     document.getElementById('quiz-stem').textContent = '？';
     document.getElementById('quiz-type').textContent = '点击上方按钮开始抽题';
     document.getElementById('quiz-opts').innerHTML = '';
@@ -5471,12 +5587,22 @@
     quizCur = Math.floor(Math.random() * QUIZZES.length);
     quizAnswered = false;
     const q = QUIZZES[quizCur];
+    // 洗牌：把选项顺序打乱，正确答案不再固定落在 A
+    const order = q.opts.map((_, i) => i);
+    for (let i = order.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const t = order[i];
+      order[i] = order[j];
+      order[j] = t;
+    }
+    quizOpts = order.map(i => q.opts[i]);
+    quizAns = order.indexOf(q.ans);
     document.getElementById('quiz-type').textContent = '题型：' + q.type;
     document.getElementById('quiz-stem').textContent = q.stem;
     document.getElementById('quiz-result').textContent = '';
     const box = document.getElementById('quiz-opts');
     box.innerHTML = '';
-    q.opts.forEach((o, i) => {
+    quizOpts.forEach((o, i) => {
       const b = document.createElement('button');
       b.className = 'opt-btn';
       b.textContent = String.fromCharCode(65 + i) + '. ' + o;
@@ -5497,14 +5623,14 @@
     const btns = document.querySelectorAll('#quiz-opts .opt-btn');
     btns.forEach((b, i) => {
       b.disabled = true;
-      if (i === q.ans) b.classList.add('correct');
+      if (i === quizAns) b.classList.add('correct');
       else if (i === pick) b.classList.add('wrong');
     });
     const res = document.getElementById('quiz-result');
-    if (pick === q.ans) {
+    if (pick === quizAns) {
       res.textContent = '✅ 答对了！' + q.exp;
     } else {
-      res.textContent = '❌ 答错了，正确答案是 ' + String.fromCharCode(65 + q.ans) + '。' + q.exp;
+      res.textContent = '❌ 答错了，正确答案是 ' + String.fromCharCode(65 + quizAns) + '。' + q.exp;
       const list = getWrong();
       if (!list.some(x => x.stem === q.stem)) {
         list.unshift({ stem: q.stem, type: q.type, ans: q.opts[q.ans], exp: q.exp });
